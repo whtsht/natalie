@@ -8,6 +8,7 @@
 #include "natalie/string_unpacker.hpp"
 #include "string.h"
 
+#include <cstdio>
 #include <unistd.h>
 
 namespace Natalie {
@@ -550,6 +551,115 @@ Value StringObject::tr_in_place(Env *env, Value from_value, Value to_value) {
 
     if (!changes_made)
         return Value::nil();
+
+    return this;
+}
+
+Value StringObject::tr_s(Env *env, Value from_value, Value to_value) const {
+    auto copy = new StringObject { m_string, m_encoding };
+    copy->tr_s_in_place(env, from_value, to_value);
+    return copy;
+}
+
+Value StringObject::tr_s_in_place(Env *env, Value from_value, Value to_value) {
+    assert_not_frozen(env);
+
+    auto from_chars = from_value.to_str(env)->chars(env).as_array_or_raise(env);
+    auto to_chars = to_value.to_str(env)->chars(env).as_array_or_raise(env);
+
+    // nothing to do
+    if (from_chars->is_empty())
+        return Value::nil();
+
+    bool inverted_match = false;
+    if (from_chars->size() > 1 && *(from_chars->first().as_string()) == "^") {
+        inverted_match = true;
+        from_chars->shift();
+    }
+
+    // convert ranges ('a-g') into literal characters
+    auto expand_ranges = [&](ArrayObject *ary) {
+        if (ary->is_empty()) return;
+
+        // (have to iterate backwards so we can insert chars)
+        for (ssize_t i = ary->size() - 1; i >= 0; i--) {
+            if (i - 2 < 0)
+                break;
+
+            auto c1 = ary->at(i - 2).as_string();
+            auto sep = ary->at(i - 1).as_string();
+            auto c2 = ary->at(i).as_string();
+
+            if (*sep == "-" && *c1 != "-" && *c2 != "-") {
+                if (c1->string().cmp(c2->string()) == 1)
+                    env->raise("ArgumentError", "invalid range \"{}-{}\" in string transliteration", c1->string(), c2->string());
+
+                auto range = RangeObject::create(env, c1, c2, false);
+                auto all_chars = range->to_a(env);
+                ary->refeq(env, Value::integer(i - 2), Value::integer(3), all_chars);
+            }
+        }
+    };
+    expand_ranges(from_chars);
+    expand_ranges(to_chars);
+
+    if (!to_chars->is_empty()) {
+        // pad out to_chars to match from_chars size
+        while (to_chars->size() < from_chars->size())
+            to_chars->push(to_chars->last());
+    }
+
+    bool changes_made = false;
+
+    auto replace_char = [&](size_t index, size_t size, size_t replacement_index) {
+        if (replacement_index >= to_chars->size()) {
+            m_string.replace_bytes(index, size, "");
+        } else {
+            auto bytes = to_chars->at(replacement_index).as_string()->string();
+            m_string.replace_bytes(index, size, bytes);
+        }
+        changes_made = true;
+    };
+
+    if (inverted_match) {
+        bool changes_made = false;
+        size_t byte_index = length();
+        auto c = prev_char(&byte_index);
+        while (!c.is_empty()) {
+            auto last_char_index = to_chars->size() >= 1 ? to_chars->size() - 1 : 0;
+
+            bool found = false;
+            for (size_t j = 0; j < from_chars->size(); j++) {
+                if (*from_chars->at(j).as_string() == c) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found)
+                replace_char(byte_index, c.size(), last_char_index);
+
+            c = prev_char(&byte_index);
+        }
+
+    } else { // regular match
+        size_t byte_index = length();
+        auto c = prev_char(&byte_index);
+        while (!c.is_empty()) {
+            for (size_t j = 0; j < from_chars->size(); j++) {
+                if (*from_chars->at(j).as_string() == c) {
+                    printf("replacing %c with %s\n", c, to_chars->at(j).as_string()->c_str());
+                    replace_char(byte_index, c.size(), j);
+                    break;
+                }
+            }
+            c = prev_char(&byte_index);
+        }
+    }
+
+    if (!changes_made)
+        return Value::nil();
+
+    this->squeeze_in_place(env, Value::nil());
 
     return this;
 }

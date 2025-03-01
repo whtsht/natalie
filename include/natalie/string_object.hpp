@@ -402,6 +402,8 @@ public:
     Value to_r(Env *) const;
     Value tr(Env *, Value, Value) const;
     Value tr_in_place(Env *, Value, Value);
+    Value tr_s(Env *, Value, Value) const;
+    Value tr_s_in_place(Env *, Value, Value);
     static Value try_convert(Env *, Value);
     Value uminus(Env *);
     Value unpack(Env *, Value, Optional<Value> = {}) const;
