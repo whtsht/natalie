@@ -1,7 +1,7 @@
 ARG IMAGE=ruby:3.4
 FROM $IMAGE
 
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y -q build-essential autoconf libtool clang lcov clang-tidy libclang-dev lldb gdb python3 python3-pip ccache
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y -q build-essential autoconf libtool clang lcov clang-tidy libclang-dev lldb gdb python3 python3-pip ccache llvm-19
 
 # PIP externally-managed-environment now forces you
 # to be explicit when installing system-wide package
