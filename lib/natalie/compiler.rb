@@ -1,6 +1,7 @@
 require 'tempfile'
 require_relative '../../build/generated/numbers'
 require_relative './compiler/backends/cpp_backend'
+require_relative './compiler/backends/llvm_backend'
 require_relative './compiler/bytecode/header'
 require_relative './compiler/bytecode/loader'
 require_relative './compiler/bytecode/ro_data'
@@ -22,7 +23,7 @@ module Natalie
     class CompileError < StandardError
     end
 
-    def initialize(ast:, path:, encoding: Encoding::UTF_8, warnings: [], data_loc: nil, options: {})
+    def initialize(ast:, path:, encoding: Encoding::UTF_8, warnings: [], data_loc: nil, options: {}, backend_type: :cpp)
       @ast = ast
       @var_num = 0
       @path = path
@@ -31,6 +32,7 @@ module Natalie
       @data_loc = data_loc
       @options = options
       @inline_cpp_enabled = {}
+      @backend_type = backend_type
     end
 
     attr_accessor :ast,
@@ -49,6 +51,10 @@ module Natalie
       return backend.compile_to_object if write_obj_path
 
       backend.compile_to_binary
+    end
+
+    def interpret
+      backend.interpret
     end
 
     def write_bytecode_to_file
@@ -117,7 +123,14 @@ module Natalie
     end
 
     def backend
-      @backend ||= CppBackend.new(instructions, compiler: self, compiler_context: @context)
+      @backend ||= case @backend_type
+                    when :cpp
+                      CppBackend.new(instructions, compiler: self, compiler_context: @context)
+                    when :llvm
+                      LLVMBackend.new(instructions, compiler: self, compiler_context: @context)
+                    else
+                      raise "Unknown backend type: #{@backend_type}"
+                    end
     end
 
     def load_path
