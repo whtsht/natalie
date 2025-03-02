@@ -59,8 +59,13 @@ module Natalie
       attr_reader :cpp_path
 
       def compile_to_binary
+        start_time = Time.now
         prepare_temp
-        compile_temp_to_binary
+        b = compile_temp_to_binary
+        end_time = Time.now
+        elapsed_time = end_time - start_time
+        puts "backend: #{elapsed_time} s"
+        b
       end
 
       def prepare_temp

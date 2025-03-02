@@ -165,6 +165,7 @@ module Natalie
 
       main_file = LoadedFile.new(path: @path, encoding: @encoding)
 
+      start_time = Time.now
       instructions = Pass1.new(
         ast,
         compiler_context:      @context,
@@ -176,6 +177,9 @@ module Natalie
       ).transform(
         used: true
       )
+      end_time = Time.now
+      elapsed_time = end_time - start_time
+      puts "pass1: #{elapsed_time} s"
       if debug == 'p1'
         Pass1.debug_instructions(instructions)
         exit
@@ -202,10 +206,14 @@ module Natalie
         'p3' => Pass3,
         'p4' => Pass4,
       }.each do |short_name, klass|
+        start_time = Time.now
         file_info.instructions = klass.new(
           file_info.instructions,
           compiler_context:,
         ).transform
+        end_time = Time.now
+        elapsed_time = end_time - start_time
+        puts "#{short_name}: #{elapsed_time} s"
         if debug == short_name
           klass.debug_instructions(file_info.instructions)
           exit
